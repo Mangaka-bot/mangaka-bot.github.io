@@ -1,1 +1,1 @@
-# mangaka-bot.github.io
+# Tic-Tac-Toe - by Mangaka
