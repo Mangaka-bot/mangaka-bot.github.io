@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tic-Tac-Toe — Mangaka</title>
+<style>
+  :root{
+    --bg:#061426;
+    --panel-top:#071427;
+    --panel-bottom:#06121d;
+    --muted:rgba(255,255,255,0.72);
+    --accent:#06b6d4;
+    --good:#16a34a;
+    --bad:#ef4444;
+    --neutral:#94a3b8;
+    --cell-size:clamp(64px, 11vmin, 110px);
+    --radius:12px;
+    --ui-gap:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    background:linear-gradient(180deg,var(--bg), #03111b 140%); color:#eaf6fb;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+
+  .app{width:100%; max-width:1100px;}
+  .panel{display:grid; grid-template-columns: 1fr 340px; gap:var(--ui-gap); background:linear-gradient(180deg,var(--panel-top),var(--panel-bottom)); padding:18px; border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,0.6);}
+  @media (max-width:980px){ .panel{grid-template-columns:1fr; padding:14px} }
+
+  .left{display:flex; flex-direction:column; gap:12px; align-items:stretch;}
+  header{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
+  h1{margin:0; color:var(--accent); font-size:1.05rem}
+  .subtitle{color:var(--muted); font-size:0.9rem}
+
+  .board-wrap{display:flex; align-items:center; justify-content:center; padding:8px}
+  .board{display:grid; grid-template-columns:repeat(3,var(--cell-size)); gap:12px; padding:12px; border-radius:12px}
+  .cell{
+    width:var(--cell-size); height:var(--cell-size); border-radius:var(--radius); position:relative;
+    display:flex; align-items:center; justify-content:center; overflow:visible;
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02));
+    border:1px solid rgba(255,255,255,0.04);
+    transition: box-shadow .14s, transform .09s, outline .12s;
+  }
+  .cell button{all:unset; width:100%; height:100%; display:block; cursor:pointer; border-radius:var(--radius); position:relative; background:transparent}
+  .mark-svg{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; width:60%; height:60%; pointer-events:none}
+  .value{position:absolute; left:50%; top:50%; transform:translate(-50%,-52%); z-index:3; font-size:calc(var(--cell-size) * 0.12); color:rgba(230,245,250,0.95); text-align:center; pointer-events:none; white-space:nowrap}
+  .cell.best{outline:3px solid var(--good); outline-offset:4px; box-shadow:0 14px 34px rgba(22,163,74,0.06)}
+  .cell.worst{outline:3px solid var(--bad); outline-offset:4px; box-shadow:0 14px 34px rgba(239,68,68,0.06)}
+  .cell.win{box-shadow:0 12px 44px rgba(22,163,74,0.14); transform:translateY(-2px)}
+  .cell.draw{box-shadow:0 10px 34px rgba(148,163,184,0.06)}
+  .cell.lose{box-shadow:0 12px 44px rgba(239,68,68,0.12)}
+
+  .status{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px; border-radius:12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.012), rgba(0,0,0,0.02)); border:1px solid rgba(255,255,255,0.03);
+  }
+  .status .msg{font-size:1rem; font-weight:700}
+  .status .sub{font-size:0.9rem; color:var(--muted)}
+
+  .right{display:flex; flex-direction:column; gap:12px; align-items:stretch}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.02)); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.03)}
+  .controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:space-between}
+  select,input[type=range],input[type=number]{background:#071627; color:inherit; border:1px solid rgba(255,255,255,0.06); padding:8px 10px; border-radius:10px}
+  button.icon-btn{display:inline-flex; gap:8px; align-items:center; justify-content:center; background:transparent; color:inherit; border:1px solid rgba(255,255,255,0.06); padding:8px 10px; border-radius:10px; cursor:pointer}
+  .small{font-size:0.88rem; color:var(--muted)}
+
+  .legend{display:flex; gap:12px; align-items:center; justify-content:center; padding-top:6px; color:var(--muted)}
+  .legend span{display:inline-block; width:14px; height:8px; border-radius:3px}
+  .footer{display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:0.88rem; margin-top:6px}
+
+  @media (max-width:520px){
+    .cell{border-radius:10px}
+    .status .msg{font-size:0.95rem}
+    .value{font-size:calc(var(--cell-size) * 0.135)}
+  }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Tic tac toe expected analyzer">
+    <div class="panel">
+      <div class="left">
+        <header>
+          <div>
+            <h1>Tic-Tac-Toe — By Ayman Shoru</h1>
+          </div>
+          <div style="text-align:right">
+            <!-- removed extra comment per request -->
+          </div>
+        </header>
+
+        <div class="status" id="statusBar" role="status" aria-live="polite">
+          <div>
+            <div id="bigMsg" class="msg">Ready</div>
+            <div id="smallMsg" class="sub"></div>
+          </div>
+          <div id="turnBadge" style="min-width:92px;text-align:center;padding:6px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03)">
+            <div class="small" style="opacity:0.85">To move</div>
+            <div id="turnPlayer" style="font-weight:700;margin-top:4px">X</div>
+          </div>
+        </div>
+
+        <div class="board-wrap">
+          <div class="board" id="board" role="grid" aria-label="tic tac toe board"></div>
+        </div>
+
+        <div class="footer">
+          <div id="helperText" class="small">Arrow keys + Enter to play. Undo: Ctrl+Z / U.</div>
+          <div id="pvText" class="small" style="color:var(--muted)"></div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="card">
+          <div class="controls" style="align-items:center">
+            <label class="small" style="display:flex; gap:6px; align-items:center;">
+              <!-- mode icon -->
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm-6 14a6 6 0 0 1 12 0v2H6v-2Z"/></svg>
+              Mode
+              <select id="mode" aria-label="play mode" style="margin-left:8px">
+                <option value="hh">Human ↔ Human</option>
+                <option value="ha">Human (X) ↔ AI (O)</option>
+                <option value="ah">AI (X) ↔ Human (O)</option>
+                <option value="aa">AI ↔ AI</option>
+              </select>
+            </label>
+
+            <div style="display:flex; gap:8px">
+              <button id="undoBtn" class="icon-btn" title="Undo (Ctrl+Z)">
+                <!-- undo icon -->
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.86 0 7 3.14 7 7 0 1.12-.26 2.18-.72 3.14l1.46 1.46C21.7 17.95 22 15.99 22 15A9 9 0 0 0 12 6z"/></svg>
+                Undo
+              </button>
+
+              <button id="restartBtn" class="icon-btn" title="Restart">
+                <!-- restart icon -->
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 6V3L8 7l4 4V8a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>
+                Restart
+              </button>
+
+              <button id="aiPlayBtn" class="icon-btn" title="Toggle AI↔AI">
+                <!-- robot icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M18.2667 11.1524C17.034 10.6218 15.9554 9.89385 15.0306 8.96938C14.1061 8.04499 13.3782 6.96597 12.8476 5.73329C12.6438 5.26091 12.4802 4.7753 12.3546 4.27733C12.3137 4.11461 12.1678 4 12 4C11.8322 4 11.6863 4.11461 11.6454 4.27733C11.5198 4.7753 11.3562 5.26043 11.1524 5.73329C10.6218 6.96597 9.89386 8.04499 8.96938 8.96938C8.04499 9.89385 6.96598 10.6218 5.73329 11.1524C5.26091 11.3562 4.7753 11.5198 4.27733 11.6454C4.11461 11.6863 4 11.8322 4 12C4 12.1678 4.11461 12.3137 4.27733 12.3546C4.7753 12.4802 5.26043 12.6438 5.73329 12.8476C6.96598 13.3782 8.04459 14.1061 8.96938 15.0306C9.89426 15.955 10.6218 17.034 11.1524 18.2667C11.3562 18.7391 11.5198 19.2247 11.6454 19.7227C11.6863 19.8854 11.8322 20 12 20C12.1678 20 12.3137 19.8854 12.3546 19.7227C12.4802 19.2247 12.6438 18.7396 12.8476 18.2667C13.3782 17.034 14.1061 15.9554 15.0306 15.0306C15.955 14.1061 17.034 13.3782 18.2667 12.8476C18.7391 12.6438 19.2247 12.4802 19.7227 12.3546C19.8854 12.3137 20 12.1678 20 12C20 11.8322 19.8854 11.6863 19.7227 11.6454C19.2247 11.5198 18.7396 11.3562 18.2667 11.1524Z" fill="url(#paint0_linear_1_5)"/>
+                  <defs>
+                    <linearGradient id="paint0_linear_1_5" x1="8.97957" y1="14.3422" x2="16.2174" y2="8.23996" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="#346BF1"/>
+                      <stop offset="0.371606" stop-color="#3186FF"/>
+                      <stop offset="0.776981" stop-color="#4FA0FF"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+                AI ↔ AI
+              </button>
+            </div>
+          </div>
+
+          <hr style="opacity:0.06;border:none;height:8px;margin:12px 0;">
+
+          <div>
+            <div class="small" style="margin-bottom:6px">AI Accuracy (0% random, 100% best)</div>
+            <div style="display:flex; gap:8px; align-items:center">
+              <input id="aiAccRange" type="range" min="0" max="100" value="100" />
+              <input id="aiAccNum" type="number" min="0" max="100" value="100" style="width:72px" />
+            </div>
+            <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between">
+              <button id="toggleInfoBtn" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg> Hide highlights & values</button>
+              <div class="small" id="infoState">Visible</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="text-align:center">
+          <div style="font-weight:700;color:var(--accent);margin-bottom:8px">Legend</div>
+          <div class="legend">
+            <div><span style="border:2px solid var(--good)"></span> Best</div>
+            <div><span style="border:2px solid var(--bad)"></span> Worst</div>
+            <div><span style="border:2px solid var(--neutral)"></span> Neutral</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const X = 1, O = -1, EMPTY = 0;
+  const WIN_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const HIGHLIGHT_EPS = 1e-9;
+
+  // DOM refs
+  const boardEl = document.getElementById('board');
+  const modeSel = document.getElementById('mode');
+  const undoBtn = document.getElementById('undoBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const aiPlayBtn = document.getElementById('aiPlayBtn');
+  const aiAccRange = document.getElementById('aiAccRange');
+  const aiAccNum = document.getElementById('aiAccNum');
+  const toggleInfoBtn = document.getElementById('toggleInfoBtn');
+  const infoState = document.getElementById('infoState');
+
+  const bigMsg = document.getElementById('bigMsg');
+  const smallMsg = document.getElementById('smallMsg');
+  const turnPlayer = document.getElementById('turnPlayer');
+  const pvText = document.getElementById('pvText');
+
+  // state
+  let board = [0,0,0,0,0,0,0,0,0];
+  let playerToMove = X;
+  let history = [];
+  let expCache = new Map();
+  let expNodes = 0;
+  let gameOver = false;
+  let forcedDrawReason = '';
+  let aiAuto = false;
+  let aiInterval = null;
+  let selectedIndex = 4;
+  let showInfo = true;
+
+  // audio (WebAudio)
+  let audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+  function playTone(freq, duration=120, type='sine', gain=0.08, when=0){
+    ensureAudio();
+    const now = audioCtx.currentTime + when/1000;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = 0;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(now);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + (duration/1000));
+    o.stop(now + (duration/1000) + 0.02);
+  }
+  function playMoveSound(){ playTone(880, 80, 'sine', 0.06); }
+  function playWinSound(){ playTone(880, 140, 'sine', 0.08, 0); playTone(1046.5, 140, 'sine', 0.06, 120); }
+  function playLoseSound(){ /* distinct lower "thud" sequence */ playTone(220, 220, 'sine', 0.12, 0); playTone(164.81, 220, 'sine', 0.08, 180); }
+  function playDrawSound(){ playTone(440, 160, 'sine', 0.06); }
+
+  // util
+  function fmtSigned(n){ if(typeof n !== 'number' || isNaN(n)) return '—'; return (n>0? '+' + n.toFixed(3) : n.toFixed(3)); }
+  function clone(b){ return b.slice(); }
+  function humanMove(i){ const rows=['top','mid','bot'], cols=['left','mid','right']; return rows[Math.floor(i/3)] + ' ' + cols[i%3]; }
+  function checkWinner(b){
+    for(const [a,c,d] of WIN_LINES) if(b[a]!==EMPTY && b[a]===b[c] && b[c]===b[d]) return b[a];
+    return 0;
+  }
+  function isTerminal(b){ if(checkWinner(b)!==0) return true; return b.every(x=>x!==EMPTY); }
+
+  function evKey(b, player, root){ return b.join('') + '|' + player + '|r=' + root; }
+  function expectedValue(b, player, root){
+    const key = evKey(b, player, root);
+    if(expCache.has(key)) return expCache.get(key);
+    expNodes++;
+    const w = checkWinner(b);
+    if(w !== 0){ const v=(w===root?1:-1); expCache.set(key,v); return v; }
+    if(b.every(x=>x!==EMPTY)){ expCache.set(key,0); return 0; }
+    if(player===root){
+      let best=-Infinity;
+      for(let i=0;i<9;i++) if(b[i]===EMPTY){
+        b[i]=player;
+        const v = expectedValue(b, -player, root);
+        b[i]=EMPTY;
+        if(v>best) best=v;
+        if(best===1) break;
+      }
+      expCache.set(key,best); return best;
+    } else {
+      let sum=0,cnt=0;
+      for(let i=0;i<9;i++) if(b[i]===EMPTY){
+        b[i]=player;
+        const v = expectedValue(b, -player, root);
+        b[i]=EMPTY;
+        sum+=v; cnt++;
+      }
+      const avg = cnt ? (sum/cnt) : 0;
+      expCache.set(key,avg); return avg;
+    }
+  }
+
+  function svgForMark(mark){
+    if(mark === X){
+      return `<svg class="mark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><line x1="18" y1="18" x2="82" y2="82" stroke="currentColor" stroke-width="12" stroke-linecap="round"/><line x1="82" y1="18" x2="18" y2="82" stroke="currentColor" stroke-width="12" stroke-linecap="round"/></svg>`;
+    } else if(mark === O){
+      return `<svg class="mark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="10" fill="none"/></svg>`;
+    } else return '';
+  }
+
+  function buildBoardUI(){
+    boardEl.innerHTML = '';
+    for(let i=0;i<9;i++){
+      const c = document.createElement('div'); c.className='cell'; c.dataset.i = i;
+      const btn = document.createElement('button'); btn.type='button';
+      btn.addEventListener('click', ()=> onCellClick(i));
+      c.appendChild(btn);
+      const markEl = document.createElement('div'); markEl.className='mark'; c.appendChild(markEl);
+      const val = document.createElement('div'); val.className='value'; c.appendChild(val);
+      boardEl.appendChild(c);
+    }
+  }
+
+  function pushState(){ history.push({board: clone(board), player: playerToMove}); }
+  function undo(){
+    if(history.length === 0) return;
+    const prev = history.pop();
+    board = clone(prev.board);
+    playerToMove = prev.player;
+    gameOver = false; forcedDrawReason = '';
+    render();
+  }
+  undoBtn.addEventListener('click', undo);
+  restartBtn.addEventListener('click', init);
+  modeSel.addEventListener('change', ()=>{ stopAiAuto(); render(); });
+  aiAccRange.addEventListener('input', e=> { aiAccNum.value = e.target.value; });
+  aiAccNum.addEventListener('input', e=> { let v = Math.max(0, Math.min(100, Number(e.target.value||0))); aiAccNum.value = v; aiAccRange.value = v; });
+
+  toggleInfoBtn.addEventListener('click', ()=>{
+    showInfo = !showInfo;
+    infoState.textContent = showInfo ? 'Visible' : 'Hidden';
+    toggleInfoBtn.innerHTML = showInfo ? `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg> Hide highlights & values` : `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c7 0 10 7 10 7s-3 7-10 7S2 12 2 12s3-7 10-7zm0 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg> Show highlights & values`;
+    render();
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+    if(e.key==='u' || e.key==='U') { undo(); }
+    const arrows = {ArrowLeft:-1, ArrowRight:1, ArrowUp:-3, ArrowDown:3};
+    if(arrows[e.key] !== undefined){
+      e.preventDefault();
+      let newIndex = selectedIndex + arrows[e.key];
+      if(e.key==='ArrowLeft' && (selectedIndex%3)===0) newIndex = selectedIndex;
+      if(e.key==='ArrowRight' && (selectedIndex%3)===2) newIndex = selectedIndex;
+      if(newIndex>=0 && newIndex<9){ selectedIndex = newIndex; focusCell(selectedIndex); }
+    }
+    if(e.key==='Enter' || e.key===' ') { e.preventDefault(); onCellClick(selectedIndex); }
+  });
+
+  function onCellClick(i){
+    if(gameOver) return;
+    const mode = modeSel.value;
+    if(isPlayerAI(playerToMove, mode)) return;
+    if(board[i] !== EMPTY) return;
+    if(!audioCtx && window.AudioContext) try{ ensureAudio(); }catch(e){}
+    pushState();
+    board[i] = playerToMove;
+    playerToMove = -playerToMove;
+    stopAiAuto();
+    playMoveSound();
+    render();
+    scheduleAiIfNeeded();
+  }
+
+  function isPlayerAI(player, mode){
+    if(mode==='hh') return false;
+    if(mode==='ha') return (player===O);
+    if(mode==='ah') return (player===X);
+    if(mode==='aa') return true;
+    return false;
+  }
+
+  function chooseAIMove(boardStateLocal, player){
+    const acc = Math.max(0, Math.min(100, Number(aiAccNum.value || aiAccRange.value || 100)));
+    const accuracy = acc / 100;
+    const moves = [];
+    let best = -Infinity;
+    for(let i=0;i<9;i++) if(boardStateLocal[i]===EMPTY){
+      boardStateLocal[i]=player;
+      const s = expectedValue(boardStateLocal, -player, player);
+      boardStateLocal[i]=EMPTY;
+      moves.push({i,s});
+      if(s>best) best=s;
+    }
+    if(moves.length===0) return null;
+    const bestMoves = moves.filter(m => Math.abs(m.s - best) <= HIGHLIGHT_EPS).map(m=>m.i);
+    if(Math.random() <= accuracy && bestMoves.length>0) return bestMoves[Math.floor(Math.random()*bestMoves.length)];
+    const all = moves.map(m=>m.i);
+    return all[Math.floor(Math.random()*all.length)];
+  }
+
+  function scheduleAiIfNeeded(){
+    const mode = modeSel.value;
+    if(isPlayerAI(playerToMove, mode) && !gameOver){
+      setTimeout(()=>{
+        if(isPlayerAI(playerToMove, mode) && !isTerminal(board) && !gameOver){
+          render();
+          if(gameOver || isTerminal(board)) return;
+          const mv = chooseAIMove(board, playerToMove);
+          if(mv!==null){
+            pushState();
+            board[mv] = playerToMove;
+            playerToMove = -playerToMove;
+            playMoveSound();
+            render();
+            if(mode==='aa' && aiAuto){} else if(isPlayerAI(playerToMove, mode)) setTimeout(scheduleAiIfNeeded, 120);
+          }
+        }
+      }, 120);
+    }
+  }
+
+  aiPlayBtn.addEventListener('click', ()=>{
+    if(aiAuto){ stopAiAuto(); return; }
+    modeSel.value = 'aa';
+    aiAuto = true;
+    aiPlayBtn.textContent = 'Pause AI ↔ AI';
+    if(aiInterval) clearInterval(aiInterval);
+    aiInterval = setInterval(()=>{
+      if(isTerminal(board) || gameOver){ init(); return; }
+      if(isPlayerAI(playerToMove, 'aa')){
+        const mv = chooseAIMove(board, playerToMove);
+        if(mv !== null){ pushState(); board[mv] = playerToMove; playerToMove = -playerToMove; playMoveSound(); render(); }
+      }
+    }, 260);
+  });
+
+  function stopAiAuto(){ if(aiAuto){ aiAuto=false; aiPlayBtn.textContent = 'AI ↔ AI'; if(aiInterval){ clearInterval(aiInterval); aiInterval=null; } } }
+
+  // rendering & highlights
+  function render(){
+    expNodes = 0;
+    const per = new Array(9).fill(null);
+    let anyEmpty = false;
+    for(let i=0;i<9;i++){
+      if(board[i]===EMPTY){
+        anyEmpty=true;
+        board[i] = playerToMove;
+        const expectedForMover = expectedValue(board, -playerToMove, playerToMove);
+        board[i] = EMPTY;
+        per[i] = {expectedForMover};
+      }
+    }
+
+    let best=-Infinity, worst=Infinity;
+    for(let i=0;i<9;i++) if(per[i]){
+      const v = per[i].expectedForMover;
+      if(v>best) best=v;
+      if(v<worst) worst=v;
+    }
+
+    const allDraws = anyEmpty && (() => {
+      for(let i=0;i<9;i++) if(per[i]){
+        if(Math.abs(per[i].expectedForMover) > 1e-9) return false;
+      }
+      return true;
+    })();
+
+    const winner = checkWinner(board);
+    if(winner !== 0){
+      gameOver = true; forcedDrawReason='';
+      bigMsg.innerHTML = winner === X ? `<span style="color:var(--good)">X wins</span>` : `<span style="color:var(--bad)">O wins</span>`;
+      smallMsg.textContent = 'Game over';
+      // play sounds: win then lose shortly after
+      try{ playWinSound(); setTimeout(playLoseSound, 260); } catch(e){}
+    } else if(!anyEmpty){
+      gameOver = true; forcedDrawReason='';
+      bigMsg.innerHTML = `<span style="color:var(--neutral)">Draw</span>`;
+      smallMsg.textContent = 'Board full';
+      try{ playDrawSound(); } catch(e){}
+    } else if(allDraws){
+      gameOver = true; forcedDrawReason='Forced draw — no winning moves';
+      bigMsg.innerHTML = `<span style="color:var(--neutral)">Forced draw</span>`;
+      smallMsg.textContent = 'All legal moves lead to draw';
+      try{ playDrawSound(); } catch(e){}
+    } else {
+      gameOver=false; forcedDrawReason='';
+      const curExp = expectedValue(board, playerToMove, playerToMove);
+      bigMsg.innerHTML = `Expected (${playerToMove===X?'X':'O'} to move): <strong style="color:var(--accent)">${fmtSigned(curExp)}</strong>`;
+      smallMsg.textContent = '';
+    }
+
+    // auto last move if exactly one empty
+    if(!gameOver){
+      const empties = [];
+      for(let i=0;i<9;i++) if(board[i]===EMPTY) empties.push(i);
+      if(empties.length === 1){
+        const idx = empties[0];
+        pushState();
+        board[idx] = playerToMove;
+        playerToMove = -playerToMove;
+        render();
+        return;
+      }
+    }
+
+    for(let i=0;i<9;i++){
+      const cell = boardEl.children[i];
+      const markEl = cell.querySelector('.mark');
+      const valEl = cell.querySelector('.value');
+      cell.classList.remove('best','worst','win','draw','lose');
+      if(board[i] === X || board[i] === O){
+        markEl.innerHTML = svgForMark(board[i]);
+        markEl.style.color = board[i] === X ? '' : '';
+      } else {
+        markEl.innerHTML = '';
+      }
+
+      if(gameOver || board[i] !== EMPTY || !showInfo) valEl.textContent = '';
+      else valEl.textContent = fmtSigned(per[i].expectedForMover);
+
+      if(board[i] === EMPTY && !gameOver){
+        const v = per[i].expectedForMover;
+        if(v > 0.999) cell.classList.add('win');
+        else if(Math.abs(v) < 1e-9) cell.classList.add('draw');
+        else if(v < -0.999) cell.classList.add('lose');
+      }
+    }
+
+    if(showInfo && !gameOver && anyEmpty){
+      if((best - worst) > HIGHLIGHT_EPS){
+        for(let i=0;i<9;i++){
+          if(board[i] === EMPTY){
+            const v = per[i].expectedForMover;
+            if(Math.abs(v - best) <= HIGHLIGHT_EPS) boardEl.children[i].classList.add('best');
+            if(Math.abs(v - worst) <= HIGHLIGHT_EPS) boardEl.children[i].classList.add('worst');
+          }
+        }
+      }
+    } else if(!showInfo){
+      for(let i=0;i<9;i++) boardEl.children[i].classList.remove('best','worst');
+    }
+
+    turnPlayer.textContent = gameOver ? '—' : (playerToMove === X ? 'X' : 'O');
+    pvText.textContent = '';
+    focusCell(selectedIndex);
+  }
+
+  function focusCell(i){ const btn = boardEl.querySelector(`.cell:nth-child(${i+1}) button`); if(btn) btn.focus(); }
+
+  function init(){
+    board = [0,0,0,0,0,0,0,0,0];
+    playerToMove = X;
+    history = [];
+    expCache = new Map();
+    expNodes = 0;
+    gameOver = false;
+    forcedDrawReason = '';
+    showInfo = true;
+    infoState.textContent = 'Visible';
+    toggleInfoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg> Hide highlights & values`;
+    buildBoardUI();
+    render();
+    scheduleAiIfNeeded();
+  }
+
+  buildBoardUI();
+  init();
+
+  window.__t3 = { expectedValue };
+
+})();
+</script>
+</body>
+</html>
